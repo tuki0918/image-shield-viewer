@@ -3,6 +3,7 @@ import { useCallback, useRef, useState } from "react";
 import { ImageRestorerBrowser } from "./restorer.browser";
 import type { ManifestData } from "./types";
 import { verifySecretKey, generateFragmentFileName } from "./utils/helpers";
+import JSZip from "jszip";
 
 const dropAreaStyle: React.CSSProperties = {
   border: "2px dashed #888",
@@ -18,7 +19,7 @@ export const ImageRestorerDemo: React.FC = () => {
   const [restoredUrls, setRestoredUrls] = useState<string[]>([]);
   const [restoredBlobs, setRestoredBlobs] = useState<Blob[]>([]);
   const [status, setStatus] = useState<string>(
-    "画像ファイルとmanifest.jsonをドラッグ＆ドロップしてください (複数画像 + manifest.json)"
+    "画像ファイルとmanifest.jsonを一度にドラッグ＆ドロップしてください (複数画像 + manifest.json)"
   );
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -70,7 +71,7 @@ export const ImageRestorerDemo: React.FC = () => {
       const urls = restoredBlobs.map((blob) => URL.createObjectURL(blob));
       setRestoredUrls(urls);
       setRestoredBlobs(restoredBlobs);
-      setStatus("復元完了！もう一度ドロップできます");
+      setStatus("復元完了！");
     } catch (e) {
       setStatus("復元に失敗しました: " + (e instanceof Error ? e.message : String(e)));
     }
@@ -123,6 +124,13 @@ export const ImageRestorerDemo: React.FC = () => {
     setImageFilesCache(null);
   }, [secretKey, manifestCache, imageFilesCache]);
 
+  // ファイル名生成の共通関数
+  const getRestoredFileName = (i: number) => {
+    if (!manifestInfo) return `restored-${i + 1}.png`;
+    const prefix = manifestInfo.config.prefix || "fragment";
+    return generateFragmentFileName(prefix, i, restoredUrls.length, "png");
+  };
+
   return (
     <div>
       <h1>Image Restorer (Browser Demo)</h1>
@@ -164,11 +172,7 @@ export const ImageRestorerDemo: React.FC = () => {
       </div>
       <div id="images">
         {restoredUrls.map((url, i) => {
-          let fileName = `restored-${i + 1}.png`;
-          if (manifestInfo) {
-            const prefix = manifestInfo.config.prefix || "fragment";
-            fileName = generateFragmentFileName(prefix, i, restoredUrls.length, "png");
-          }
+          const fileName = getRestoredFileName(i);
           return (
             <div key={i} style={{ display: "inline-block", textAlign: "center" }}>
               <img src={url} alt={`restored-${i}`} style={{ maxWidth: 200, margin: 8, border: "1px solid #ccc" }} />
@@ -177,12 +181,37 @@ export const ImageRestorerDemo: React.FC = () => {
                 href={url}
                 download={fileName}
                 style={{ display: "inline-block", marginTop: 4, padding: "0.3em 1em", background: "#1976d2", color: "#fff", borderRadius: 4, textDecoration: "none", fontSize: "0.9em" }}
+                id={`download-link-${i}`}
               >
                 ダウンロード
               </a>
             </div>
           );
         })}
+        {restoredUrls.length > 0 && (
+          <div style={{ marginTop: 16 }}>
+            <button
+              onClick={async () => {
+                if (!restoredBlobs.length || !manifestInfo) return;
+                const zip = new JSZip();
+                for (let i = 0; i < restoredBlobs.length; i++) {
+                  const fileName = getRestoredFileName(i);
+                  zip.file(fileName, restoredBlobs[i]);
+                }
+                const content = await zip.generateAsync({ type: "blob" });
+                const url = URL.createObjectURL(content);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = manifestInfo ? `restored_${manifestInfo.id}.zip` : "images.zip";
+                a.click();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+              }}
+              style={{ padding: "0.6em 2em", background: "#1976d2", color: "#fff", borderRadius: 6, fontSize: "1em", marginTop: 8 }}
+            >
+              ZIPで一括ダウンロード
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
