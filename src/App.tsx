@@ -1,13 +1,12 @@
-import './App.css'
-import { ImageRestorerDemo } from './ImageRestorerDemo'
+import "./App.css";
+import { ImageRestorerDemo } from "./ImageRestorerDemo";
 
 function App() {
-
   return (
     <>
-        <ImageRestorerDemo />
+      <ImageRestorerDemo />
     </>
-  )
+  );
 }
 
-export default App
+export default App;

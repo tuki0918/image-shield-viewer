@@ -5,19 +5,19 @@
  * @returns Array of block counts per fragment
  */
 export function calcBlocksPerFragment(
-    totalBlocks: number,
-    fragmentCount: number,
-  ): number[] {
-    const blocksPerImage = Math.ceil(totalBlocks / fragmentCount);
-    let remainingBlocks = totalBlocks;
-    const fragmentBlocksCount: number[] = [];
-    for (let i = 0; i < fragmentCount; i++) {
-      const count = Math.min(blocksPerImage, remainingBlocks);
-      fragmentBlocksCount.push(count);
-      remainingBlocks -= count;
-    }
-    return fragmentBlocksCount;
+  totalBlocks: number,
+  fragmentCount: number,
+): number[] {
+  const blocksPerImage = Math.ceil(totalBlocks / fragmentCount);
+  let remainingBlocks = totalBlocks;
+  const fragmentBlocksCount: number[] = [];
+  for (let i = 0; i < fragmentCount; i++) {
+    const count = Math.min(blocksPerImage, remainingBlocks);
+    fragmentBlocksCount.push(count);
+    remainingBlocks -= count;
   }
+  return fragmentBlocksCount;
+}
 
 // ブラウザ用: Uint8ClampedArray対応 extractBlock
 export function extractBlockBrowser(
@@ -57,7 +57,8 @@ export function splitImageToBlocksBrowserRaw(
   height: number,
   blockSize: number,
 ): { data: Uint8ClampedArray; width: number; height: number }[] {
-  const blocks: { data: Uint8ClampedArray; width: number; height: number }[] = [];
+  const blocks: { data: Uint8ClampedArray; width: number; height: number }[] =
+    [];
   const blockCountX = Math.ceil(width / blockSize);
   const blockCountY = Math.ceil(height / blockSize);
   for (let by = 0; by < blockCountY; by++) {
