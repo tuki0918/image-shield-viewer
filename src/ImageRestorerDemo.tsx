@@ -2,6 +2,7 @@ import * as React from "react";
 import { useCallback, useRef, useState } from "react";
 import { ImageRestorerBrowser } from "./restorer.browser";
 import type { ManifestData } from "./types";
+import { verifySecretKey } from "./utils/helpers";
 
 const dropAreaStyle: React.CSSProperties = {
   border: "2px dashed #888",
@@ -20,6 +21,10 @@ export const ImageRestorerDemo: React.FC = () => {
   );
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [secretKey, setSecretKey] = useState("");
+  const [requireSecret, setRequireSecret] = useState(false);
+  const [manifestCache, setManifestCache] = useState<ManifestData | null>(null);
+  const [imageFilesCache, setImageFilesCache] = useState<File[] | null>(null);
 
   const handleDrop = useCallback(async (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -43,6 +48,14 @@ export const ImageRestorerDemo: React.FC = () => {
       manifest = JSON.parse(manifestText);
     } catch (e) {
       setStatus("manifest.jsonのパースに失敗しました");
+      return;
+    }
+    // 暗号化対応: secretKey 入力を促す
+    if (manifest.secure) {
+      setRequireSecret(true);
+      setManifestCache(manifest);
+      setImageFilesCache(imageFiles);
+      setStatus("この画像は暗号化されています。復号キーを入力してください。");
       return;
     }
     setStatus("復元中...");
@@ -79,9 +92,44 @@ export const ImageRestorerDemo: React.FC = () => {
     await handleDrop(fakeEvent);
   }, [handleDrop]);
 
+  // 暗号化画像用: secretKey 入力後の復元処理
+  const handleSecretSubmit = useCallback(async () => {
+    if (!manifestCache || !imageFilesCache) return;
+    if (!secretKey) {
+      setStatus("復号キーを入力してください");
+      return;
+    }
+    setStatus("復元中...");
+    setRequireSecret(false);
+    try {
+      const restorer = new ImageRestorerBrowser(verifySecretKey(secretKey));
+      const restoredBlobs = await restorer.restoreImages(imageFilesCache, manifestCache);
+      const urls = restoredBlobs.map((blob) => URL.createObjectURL(blob));
+      setRestoredUrls(urls);
+      setStatus("復元完了！もう一度ドロップできます");
+    } catch (e) {
+      setStatus("復元に失敗しました: " + (e instanceof Error ? e.message : String(e)));
+    }
+    setSecretKey("");
+    setManifestCache(null);
+    setImageFilesCache(null);
+  }, [secretKey, manifestCache, imageFilesCache]);
+
   return (
     <div>
       <h1>Image Restorer (Browser Demo)</h1>
+      {requireSecret && (
+        <div style={{ margin: "1em 0", padding: "1em", border: "1px solid #ccc", borderRadius: 8, background: "#fffbe6" }}>
+          <div>復号キー（secretKey）を入力してください:</div>
+          <input
+            type="password"
+            value={secretKey}
+            onChange={e => setSecretKey(e.target.value)}
+            style={{ margin: "0.5em 0", padding: "0.5em", width: 200 }}
+          />
+          <button onClick={handleSecretSubmit} style={{ marginLeft: 8 }}>復元</button>
+        </div>
+      )}
       <div
         style={{
           ...dropAreaStyle,
