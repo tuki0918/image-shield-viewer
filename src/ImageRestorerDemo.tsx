@@ -164,7 +164,7 @@ export const ImageRestorerDemo: React.FC = () => {
           style={{ display: "none" }}
           ref={inputRef}
           onChange={handleFileInput}
-          accept=".json,image/*"
+          accept=".json,image/*,.enc"
         />
         <div style={{ fontSize: "0.9em", color: "#aaa", marginTop: "1em" }}>
           クリックでファイル選択も可能
