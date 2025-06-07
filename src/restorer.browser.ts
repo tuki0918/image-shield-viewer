@@ -1,6 +1,8 @@
 import type { ManifestData } from "./types";
 import { unshuffleArrayWithKey } from "./utils/random";
 import { calcBlocksPerFragment, splitImageToBlocksBrowserRaw, blocksToImageBufferBrowser } from "./utils/block";
+import { uuidToIV } from "./utils/crypto.browser";
+import CryptoJS from "crypto-js";
 
 // Type guard for ArrayBuffer (not SharedArrayBuffer)
 function isArrayBuffer(input: any): input is ArrayBuffer {
@@ -66,14 +68,40 @@ async function blocksToPngImageBrowser(
   );
 }
 
+// ArrayBuffer を AES-256-CBC で復号
+function decryptArrayBuffer(arrayBuffer: ArrayBuffer, secretKey: string, uuid: string): ArrayBuffer {
+  // Node.jsと同じくkeyはSHA-256で32バイト化
+  const key = CryptoJS.SHA256(secretKey);
+  const iv = CryptoJS.enc.Hex.parse(Array.from(uuidToIV(uuid)).map(b => b.toString(16).padStart(2, "0")).join(""));
+  const encrypted = CryptoJS.lib.WordArray.create(new Uint8Array(arrayBuffer) as any);
+  const encryptedBase64 = CryptoJS.enc.Base64.stringify(encrypted);
+  const decrypted = CryptoJS.AES.decrypt(encryptedBase64, key, { iv, mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.Pkcs7 });
+  // WordArray → Uint8Array → ArrayBuffer
+  const decryptedBytes = decrypted.words.reduce((arr: number[], word: number) => {
+    arr.push((word >> 24) & 0xff, (word >> 16) & 0xff, (word >> 8) & 0xff, word & 0xff);
+    return arr;
+  }, []);
+  // 長さ調整
+  const len = decrypted.sigBytes;
+  return (new Uint8Array(decryptedBytes.slice(0, len))).buffer;
+}
+
 export class ImageRestorerBrowser {
+  private secretKey?: string;
+
+  constructor(secretKey?: string) {
+    this.secretKey = secretKey;
+  }
+
   // fragmentImageからブロック配列を抽出する（Node.jsのextractBlocksFromFragment相当）
   private async extractBlocksFromFragmentBrowser(
     fragmentImage: File | Blob | ArrayBuffer | Uint8Array,
     manifest: ManifestData
   ): Promise<{ data: Uint8ClampedArray; width: number; height: number }[]> {
-    const arrayBuffer = await toArrayBuffer(fragmentImage);
-    // 暗号化対応は省略（必要なら追加）
+    let arrayBuffer = await toArrayBuffer(fragmentImage);
+    if (manifest.secure && this.secretKey) {
+      arrayBuffer = decryptArrayBuffer(arrayBuffer, this.secretKey, manifest.id);
+    }
     return await splitImageToBlocksBrowser(arrayBuffer, manifest.config.blockSize);
   }
 
