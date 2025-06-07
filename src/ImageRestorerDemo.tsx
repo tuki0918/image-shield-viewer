@@ -2,7 +2,7 @@ import * as React from "react";
 import { useCallback, useRef, useState } from "react";
 import { ImageRestorerBrowser } from "./restorer.browser";
 import type { ManifestData } from "./types";
-import { verifySecretKey } from "./utils/helpers";
+import { verifySecretKey, generateFragmentFileName } from "./utils/helpers";
 
 const dropAreaStyle: React.CSSProperties = {
   border: "2px dashed #888",
@@ -16,6 +16,7 @@ const dropAreaStyle: React.CSSProperties = {
 
 export const ImageRestorerDemo: React.FC = () => {
   const [restoredUrls, setRestoredUrls] = useState<string[]>([]);
+  const [restoredBlobs, setRestoredBlobs] = useState<Blob[]>([]);
   const [status, setStatus] = useState<string>(
     "画像ファイルとmanifest.jsonをドラッグ＆ドロップしてください (複数画像 + manifest.json)"
   );
@@ -25,11 +26,13 @@ export const ImageRestorerDemo: React.FC = () => {
   const [requireSecret, setRequireSecret] = useState(false);
   const [manifestCache, setManifestCache] = useState<ManifestData | null>(null);
   const [imageFilesCache, setImageFilesCache] = useState<File[] | null>(null);
+  const [manifestInfo, setManifestInfo] = useState<ManifestData | null>(null);
 
   const handleDrop = useCallback(async (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setDragOver(false);
     setRestoredUrls([]);
+    setRestoredBlobs([]);
     const files = Array.from(e.dataTransfer.files) as File[];
     if (!files.length) return;
     const manifestFile: File | undefined = files.find((f: File) => f.name.endsWith("manifest.json"));
@@ -46,6 +49,7 @@ export const ImageRestorerDemo: React.FC = () => {
     try {
       const manifestText = await manifestFile.text();
       manifest = JSON.parse(manifestText);
+      setManifestInfo(manifest);
     } catch (e) {
       setStatus("manifest.jsonのパースに失敗しました");
       return;
@@ -55,6 +59,7 @@ export const ImageRestorerDemo: React.FC = () => {
       setRequireSecret(true);
       setManifestCache(manifest);
       setImageFilesCache(imageFiles);
+      setManifestInfo(manifest);
       setStatus("この画像は暗号化されています。復号キーを入力してください。");
       return;
     }
@@ -64,6 +69,7 @@ export const ImageRestorerDemo: React.FC = () => {
       const restoredBlobs = await restorer.restoreImages(imageFiles, manifest);
       const urls = restoredBlobs.map((blob) => URL.createObjectURL(blob));
       setRestoredUrls(urls);
+      setRestoredBlobs(restoredBlobs);
       setStatus("復元完了！もう一度ドロップできます");
     } catch (e) {
       setStatus("復元に失敗しました: " + (e instanceof Error ? e.message : String(e)));
@@ -106,6 +112,8 @@ export const ImageRestorerDemo: React.FC = () => {
       const restoredBlobs = await restorer.restoreImages(imageFilesCache, manifestCache);
       const urls = restoredBlobs.map((blob) => URL.createObjectURL(blob));
       setRestoredUrls(urls);
+      setRestoredBlobs(restoredBlobs);
+      setManifestInfo(manifestCache);
       setStatus("復元完了！もう一度ドロップできます");
     } catch (e) {
       setStatus("復元に失敗しました: " + (e instanceof Error ? e.message : String(e)));
@@ -155,9 +163,26 @@ export const ImageRestorerDemo: React.FC = () => {
         </div>
       </div>
       <div id="images">
-        {restoredUrls.map((url, i) => (
-          <img key={i} src={url} alt={`restored-${i}`} style={{ maxWidth: 200, margin: 8, border: "1px solid #ccc" }} />
-        ))}
+        {restoredUrls.map((url, i) => {
+          let fileName = `restored-${i + 1}.png`;
+          if (manifestInfo) {
+            const prefix = manifestInfo.config.prefix || "fragment";
+            fileName = generateFragmentFileName(prefix, i, restoredUrls.length, "png");
+          }
+          return (
+            <div key={i} style={{ display: "inline-block", textAlign: "center" }}>
+              <img src={url} alt={`restored-${i}`} style={{ maxWidth: 200, margin: 8, border: "1px solid #ccc" }} />
+              <br />
+              <a
+                href={url}
+                download={fileName}
+                style={{ display: "inline-block", marginTop: 4, padding: "0.3em 1em", background: "#1976d2", color: "#fff", borderRadius: 4, textDecoration: "none", fontSize: "0.9em" }}
+              >
+                ダウンロード
+              </a>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
