@@ -81,7 +81,7 @@ export const ImageRestorerDemo: React.FC = () => {
 
   return (
     <div>
-      <h1>Image Restorer Sample (React)</h1>
+      <h1>Image Restorer (Browser Demo)</h1>
       <div
         style={{
           ...dropAreaStyle,
