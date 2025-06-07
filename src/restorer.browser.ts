@@ -1,5 +1,6 @@
 import type { ManifestData } from "./types";
 import { unshuffleArrayWithKey } from "./utils/random";
+import { calcBlocksPerFragment } from "./utils/block";
 
 // Type guard for ArrayBuffer (not SharedArrayBuffer)
 function isArrayBuffer(input: any): input is ArrayBuffer {
@@ -32,7 +33,7 @@ async function splitImageToBlocksBrowser(
   const canvas = document.createElement("canvas");
   canvas.width = img.width;
   canvas.height = img.height;
-  const ctx = canvas.getContext("2d")!;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
   ctx.drawImage(img, 0, 0);
   const blocks: { data: Uint8ClampedArray; width: number; height: number }[] = [];
   for (let y = 0; y < img.height; y += blockSize) {
@@ -81,9 +82,9 @@ export class ImageRestorerBrowser {
     fragmentImages: (File | Blob | ArrayBuffer | Uint8Array)[],
     manifest: ManifestData
   ): Promise<Blob[]> {
-    // 1. Extract blocks from each fragment image
-    const fragmentBlocksCount = manifest.images.map((img) => img.x * img.y);
-    const totalBlocks = fragmentBlocksCount.reduce((a, b) => a + b, 0);
+    // 1. Calculate total blocks and fragment block counts (restorer.tsと同じロジック)
+    const totalBlocks = manifest.images.map((img) => img.x * img.y).reduce((a, b) => a + b, 0);
+    const fragmentBlocksCount = calcBlocksPerFragment(totalBlocks, fragmentImages.length);
 
     // 2. Extract blocks from each fragment image
     const allBlocks: { data: Uint8ClampedArray; width: number; height: number }[] = [];
@@ -121,4 +122,4 @@ export class ImageRestorerBrowser {
     }
     return restoredImages;
   }
-} 
+}
