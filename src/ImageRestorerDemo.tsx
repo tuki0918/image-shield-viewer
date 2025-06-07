@@ -52,6 +52,7 @@ export const ImageRestorerDemo: React.FC = () => {
       manifest = JSON.parse(manifestText);
       setManifestInfo(manifest);
     } catch (e) {
+      console.error(e);
       setStatus("manifest.jsonのパースに失敗しました");
       return;
     }

@@ -5,12 +5,12 @@ import { uuidToIV } from "./utils/crypto.browser";
 import CryptoJS from "crypto-js";
 
 // Type guard for ArrayBuffer (not SharedArrayBuffer)
-function isArrayBuffer(input: any): input is ArrayBuffer {
+function isArrayBuffer(input: unknown): input is ArrayBuffer {
   return (
-    input &&
     typeof input === "object" &&
-    input.constructor &&
-    input.constructor.name === "ArrayBuffer"
+    input !== null &&
+    (input as { constructor?: { name?: string } }).constructor !== undefined &&
+    (input as { constructor: { name: string } }).constructor.name === "ArrayBuffer"
   );
 }
 
@@ -73,7 +73,7 @@ function decryptArrayBuffer(arrayBuffer: ArrayBuffer, secretKey: string, uuid: s
   // Node.jsと同じくkeyはSHA-256で32バイト化
   const key = CryptoJS.SHA256(secretKey);
   const iv = CryptoJS.enc.Hex.parse(Array.from(uuidToIV(uuid)).map(b => b.toString(16).padStart(2, "0")).join(""));
-  const encrypted = CryptoJS.lib.WordArray.create(new Uint8Array(arrayBuffer) as any);
+  const encrypted = CryptoJS.lib.WordArray.create(new Uint8Array(arrayBuffer) as unknown as number[]);
   const encryptedBase64 = CryptoJS.enc.Base64.stringify(encrypted);
   const decrypted = CryptoJS.AES.decrypt(encryptedBase64, key, { iv, mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.Pkcs7 });
   // WordArray → Uint8Array → ArrayBuffer
