@@ -1,6 +1,6 @@
 import type { ManifestData } from "./types";
 import { unshuffleArrayWithKey } from "./utils/random";
-import { calcBlocksPerFragment } from "./utils/block";
+import { calcBlocksPerFragment, splitImageToBlocksBrowserRaw, blocksToImageBufferBrowser } from "./utils/block";
 
 // Type guard for ArrayBuffer (not SharedArrayBuffer)
 function isArrayBuffer(input: any): input is ArrayBuffer {
@@ -35,16 +35,9 @@ async function splitImageToBlocksBrowser(
   canvas.height = img.height;
   const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
   ctx.drawImage(img, 0, 0);
-  const blocks: { data: Uint8ClampedArray; width: number; height: number }[] = [];
-  for (let y = 0; y < img.height; y += blockSize) {
-    for (let x = 0; x < img.width; x += blockSize) {
-      const w = Math.min(blockSize, img.width - x);
-      const h = Math.min(blockSize, img.height - y);
-      const imageData = ctx.getImageData(x, y, w, h);
-      blocks.push({ data: new Uint8ClampedArray(imageData.data), width: w, height: h });
-    }
-  }
-  return blocks;
+  const imageData = ctx.getImageData(0, 0, img.width, img.height);
+  // 共通ロジックで分割
+  return splitImageToBlocksBrowserRaw(imageData.data, img.width, img.height, blockSize);
 }
 
 // Reconstruct image from blocks
@@ -54,23 +47,19 @@ async function blocksToPngImageBrowser(
   height: number,
   blockSize: number
 ): Promise<Blob> {
+  // dataのみ抽出してbuffer化
+  const blockBuffers = blocks.map(b => b.data);
+  // Node.jsと同じロジックでバッファを復元
+  const imageBuffer = blocksToImageBufferBrowser(blockBuffers, width, height, blockSize);
+  // 型エラー回避のため、Uint8ClampedArrayとして明示的にコピー
+  const clampedBuffer = new Uint8ClampedArray(imageBuffer);
+  const imageData = new ImageData(clampedBuffer, width, height);
+  // canvasに描画
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext("2d")!;
-  let blockIndex = 0;
-  const blockCountX = Math.ceil(width / blockSize);
-  const blockCountY = Math.ceil(height / blockSize);
-  for (let by = 0; by < blockCountY; by++) {
-    for (let bx = 0; bx < blockCountX; bx++) {
-      if (blockIndex < blocks.length) {
-        const { data, width: w, height: h } = blocks[blockIndex];
-        const imageData = new ImageData(new Uint8ClampedArray(data), w, h);
-        ctx.putImageData(imageData, bx * blockSize, by * blockSize);
-        blockIndex++;
-      }
-    }
-  }
+  ctx.putImageData(imageData, 0, 0);
   // Output as PNG Blob
   return await new Promise<Blob>((resolve) =>
     canvas.toBlob((blob) => resolve(blob!), "image/png")
@@ -78,33 +67,47 @@ async function blocksToPngImageBrowser(
 }
 
 export class ImageRestorerBrowser {
+  // fragmentImageからブロック配列を抽出する（Node.jsのextractBlocksFromFragment相当）
+  private async extractBlocksFromFragmentBrowser(
+    fragmentImage: File | Blob | ArrayBuffer | Uint8Array,
+    manifest: ManifestData
+  ): Promise<{ data: Uint8ClampedArray; width: number; height: number }[]> {
+    const arrayBuffer = await toArrayBuffer(fragmentImage);
+    // 暗号化対応は省略（必要なら追加）
+    return await splitImageToBlocksBrowser(arrayBuffer, manifest.config.blockSize);
+  }
+
   async restoreImages(
     fragmentImages: (File | Blob | ArrayBuffer | Uint8Array)[],
     manifest: ManifestData
   ): Promise<Blob[]> {
-    // 1. Calculate total blocks and fragment block counts (restorer.tsと同じロジック)
-    const totalBlocks = manifest.images.map((img) => img.x * img.y).reduce((a, b) => a + b, 0);
-    const fragmentBlocksCount = calcBlocksPerFragment(totalBlocks, fragmentImages.length);
+    // 1. Calculate the number of blocks for each image
+    const imageBlockCounts = manifest.images.map((img) => img.x * img.y);
+    const totalBlocks = imageBlockCounts.reduce((a, b) => a + b, 0);
 
-    // 2. Extract blocks from each fragment image
+    // 2. Calculate the number of blocks per fragment image
+    const fragmentBlocksCount = calcBlocksPerFragment(
+      totalBlocks,
+      fragmentImages.length
+    );
+
+    // 3. Extract all blocks from fragment images (extract the correct number from each fragment image)
     const allBlocks: { data: Uint8ClampedArray; width: number; height: number }[] = [];
     for (let i = 0; i < fragmentImages.length; i++) {
-      const arrayBuffer = await toArrayBuffer(fragmentImages[i]);
-      const blocks = await splitImageToBlocksBrowser(
-        arrayBuffer,
-        manifest.config.blockSize
+      const blocks = await this.extractBlocksFromFragmentBrowser(
+        fragmentImages[i],
+        manifest
       );
-      // Only take the required number of blocks for each fragment
       allBlocks.push(...blocks.slice(0, fragmentBlocksCount[i]));
     }
 
-    // 3. Unshuffle
+    // 4. Reproduce the shuffle order (common logic)
     const restoredBlocks = unshuffleArrayWithKey(
       allBlocks,
       manifest.config.seed
     );
 
-    // 4. Assign blocks to each image and restore
+    // 6. Assign blocks to each image and restore
     const restoredImages: Blob[] = [];
     let blockPtr = 0;
     for (let imgIdx = 0; imgIdx < manifest.images.length; imgIdx++) {
