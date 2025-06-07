@@ -203,16 +203,104 @@ export const ImageRestorerDemo: React.FC = () => {
       <div id="images">
         {restoredUrls.map((url, i) => {
           const fileName = getRestoredFileName(i);
+          // Get image dimensions from manifestInfo
+          const imageInfo = manifestInfo?.images?.[i];
+          const width = imageInfo?.w;
+          const height = imageInfo?.h;
           return (
             <div
               key={url}
-              style={{ display: "inline-block", textAlign: "center" }}
+              style={{
+                display: "inline-block",
+                textAlign: "center",
+                position: "relative",
+                margin: 8,
+                width: 200,
+                height: "auto",
+              }}
             >
-              <img
-                src={url}
-                alt={`restored-${i}`}
-                style={{ maxWidth: 200, margin: 8, border: "1px solid #ccc" }}
-              />
+              <div
+                style={{
+                  position: "relative",
+                  width: 200,
+                  height: "auto",
+                  display: "inline-block",
+                }}
+              >
+                {/* Magnifier icon button (top-right) */}
+                <button
+                  type="button"
+                  onClick={() =>
+                    window.open(url, "_blank", "noopener,noreferrer")
+                  }
+                  style={{
+                    position: "absolute",
+                    top: 8,
+                    right: 8,
+                    background: "rgba(128,128,128,0.7)",
+                    border: "none",
+                    padding: 2,
+                    margin: 0,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    color: "#fff",
+                    borderRadius: 6,
+                    zIndex: 2,
+                    transition: "transform 0.15s cubic-bezier(.4,1.3,.6,1)",
+                  }}
+                  title="新しいタブで開く"
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = "scale(1.18)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = "scale(1)";
+                  }}
+                >
+                  {/* Magnifier SVG icon */}
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    style={{ display: "block" }}
+                  >
+                    <title>Magnifier</title>
+                    <circle cx="11" cy="11" r="8" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  </svg>
+                </button>
+                {/* Overlay for image size (bottom-left, over the image) */}
+                <div
+                  style={{
+                    position: "absolute",
+                    left: 8,
+                    bottom: 8,
+                    background: "rgba(128,128,128,0.7)",
+                    color: "#fff",
+                    fontSize: "0.85em",
+                    borderRadius: 6,
+                    padding: "2px 8px",
+                    zIndex: 2,
+                    minWidth: 0,
+                  }}
+                >
+                  {height && width ? `${height}px x ${width}px` : ""}
+                </div>
+                <img
+                  src={url}
+                  alt={`restored-${i}`}
+                  style={{
+                    maxWidth: 200,
+                    border: "1px solid #ccc",
+                    display: "block",
+                  }}
+                />
+              </div>
               <br />
               <a
                 href={url}
