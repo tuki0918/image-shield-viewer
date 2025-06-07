@@ -19,7 +19,7 @@ export const ImageRestorerDemo: React.FC = () => {
   const [restoredUrls, setRestoredUrls] = useState<string[]>([]);
   const [restoredBlobs, setRestoredBlobs] = useState<Blob[]>([]);
   const [status, setStatus] = useState<string>(
-    "画像ファイルとmanifest.jsonを一度にドラッグ＆ドロップしてください (複数画像 + manifest.json)"
+    "画像ファイルとmanifest.jsonを一緒にドラッグ＆ドロップしてください (複数画像 + manifest.json)"
   );
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -133,7 +133,7 @@ export const ImageRestorerDemo: React.FC = () => {
 
   return (
     <div>
-      <h1>Image Restorer (Browser Demo)</h1>
+      <h1>Image Restorer (Demo)</h1>
       {requireSecret && (
         <div style={{ margin: "1em 0", padding: "1em", border: "1px solid #ccc", borderRadius: 8, background: "#fffbe6" }}>
           <div>復号キー（secretKey）を入力してください:</div>
